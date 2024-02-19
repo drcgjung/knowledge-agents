@@ -1,0 +1,107 @@
+name: ZAP_ALL
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  zap_scan1:
+    runs-on: ubuntu-latest
+    name: OWASP ZAP API Scan
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: API Test 1
+        id: api_test_1
+        run: |
+          # Perform API Test 1 and capture the response
+          response=$(curl -w "%{http_code}" -v GET https://knowledge.int.demo.catena-x.net/oem-provider-agent3/sparql?query=SELECT%20%3Fs%20%3Fp%20%3Fo%20WHERE%20%3Fs%20%3Fp%20%3Fo.%20LIMIT%2010 --user "${{ secrets.BASIC_AUTH_USER }}:${{ secrets.BASIC_AUTH_PASSWORD }}")
+          echo "Response: $response"
+          
+      - name: API Test 2
+        id: api_test_2
+        run: |
+          # Perform API Test 2 and capture the response
+          response=$(curl -w "%{http_code}" -X GET https://knowledge.int.demo.catena-x.net/oem-provider-agent3/sparql?query=SELECT%20%3Fs%20%3Fp%20%3Fo%20WHERE%20%3Fs%20%3Fp%20%3Fo.%20LIMIT%2010 --header "Authorization: Basic ${{ secrets.BASIC_AUTH_TOKEN }}")
+          echo "Response: $response"
+          
+      - name: API Test 3
+        id: api_test_3
+        run: |
+          # Perform API Test 3 and capture the response
+          response=$(curl -X POST https://knowledge.int.demo.catena-x.net/oem-edc-control/BPNL00000003COJN/management/v2/assets/request --header "X-Api-Key: ${{ secrets.API_KEY }}")
+          echo "Response: $response"
+          
+      - name: API Test 4
+        id: api_test_4
+        run: |
+          # Perform API Test 4 and capture the response
+          response=$(curl -X GET https://knowledge.int.demo.catena-x.net/tiera-edc-data/BPNL00000003CPIY/api/agent?query=SELECT%20%3Fs%20%3Fp%20%3Fo%20WHERE%20%7B%20%3Fs%20%3Fp%20%3Fo.%7D%20LIMIT%2010 --header "Authorization: Bearer ${{ secrets.OAUTH2 }}")
+          echo "Response: $response"
+          
+      - name: Generating report skeletons
+        if: success() || failure()
+        run: |
+          touch API_report.html
+          chmod a+w API_report.html
+          ls -lrt
+          
+      - name: Run ZAP API scan
+        run: |
+          set +e
+          
+          echo "Pulling ZAP image..."
+          docker pull ghcr.io/zaproxy/zaproxy:stable -q
+          echo "Starting ZAP Docker container..."
+          docker run -v ${GITHUB_WORKSPACE}:/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable zap-api-scan.py -t docs/openapi.json -f openapi -r API_report.html -T 1
+          
+          echo "... done."
+          
+      - name: Upload HTML report
+        if: success() || failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ZAP_API scan report
+          path: ./API_report.html
+          retention-days: 1
+          
+  zap_scan2:
+    runs-on: ubuntu-latest
+    name: OWASP ZAP FULL Scan
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          ref: main
+
+      - name: Generating report skeletons
+        if: success() || failure()
+        run: |
+          touch fullscan_report.html
+          chmod a+w fullscan_report.html
+          ls -lrt
+          
+      - name: Perform ZAP FULL scan
+        run: |
+          set +e
+          
+          echo "Pulling ZAP image..."
+          docker pull ghcr.io/zaproxy/zaproxy:stable -q
+          echo "Starting ZAP Docker container..."
+          docker run -v ${GITHUB_WORKSPACE}:/zap/wrk/:rw ghcr.io/zaproxy/zaproxy:stable zap-full-scan.py -t https://knowledge.int.demo.catena-x.net -r fullscan_report.html -T 1
+          
+          echo "... done."
+          
+      - name: Upload HTML report
+        if: success() || failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: ZAP_FULL scan report
+          path: ./fullscan_report.html
+          retention-days: 1

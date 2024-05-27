@@ -36,7 +36,6 @@ import org.eclipse.tractusx.agents.service.DataManagement;
 import org.eclipse.tractusx.agents.utils.Monitor;
 
 import java.io.IOException;
-import java.util.regex.Matcher;
 
 /**
  * The Graph Controller exposes a REST API endpoint
@@ -51,6 +50,7 @@ public class GraphController {
     protected final RdfStore store;
     protected final DataManagement management;
     protected final AgentConfig config;
+    protected final UriSanitizer sanitizer;
 
     /**
      * creates a new agent controller
@@ -58,11 +58,12 @@ public class GraphController {
      * @param monitor logging subsystem
      * @param store   the rdf store to extend
      */
-    public GraphController(Monitor monitor, RdfStore store, DataManagement management, AgentConfig config) {
+    public GraphController(Monitor monitor, RdfStore store, DataManagement management, AgentConfig config, UriSanitizer sanitizer) {
         this.monitor = monitor;
         this.store = store;
         this.management = management;
         this.config = config;
+        this.sanitizer = sanitizer;
     }
 
     /**
@@ -151,9 +152,9 @@ public class GraphController {
     ) {
         monitor.debug(String.format("Received a DELETE request %s for asset %s", request, asset));
         try {
-            Matcher assetMatcher = config.getAssetReferencePattern().matcher(asset);
-            if (assetMatcher.matches()) {
-                management.deleteAsset(assetMatcher.group("asset"));
+            String sanitizedAssetId = sanitizer.sanitizeAssetId(asset);
+            if (sanitizedAssetId != null) {
+                management.deleteAsset(sanitizedAssetId);
                 return Response.ok(store.deleteAsset(asset), MediaType.APPLICATION_JSON_TYPE).build();
             } else {
                 return Response.status(Response.Status.NOT_ACCEPTABLE).build();

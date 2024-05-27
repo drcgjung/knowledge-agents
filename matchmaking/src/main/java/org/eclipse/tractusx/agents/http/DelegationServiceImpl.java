@@ -21,10 +21,8 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.ws.rs.WebApplicationException;
 import jakarta.ws.rs.core.HttpHeaders;
-import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.UriInfo;
-import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpStatus;
@@ -43,12 +41,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.Charset;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
  * A service that may delegate an incoming
@@ -66,6 +61,7 @@ public class DelegationServiceImpl implements DelegationService {
     };
     protected final TypeManager typeManager;
     protected final AgentConfig config;
+    protected final UriSanitizer sanitizer;
 
     /**
      * creates a new delegation service
@@ -74,12 +70,13 @@ public class DelegationServiceImpl implements DelegationService {
      * @param monitor             logging facility
      * @param client              outgoing http infrastructure
      */
-    public DelegationServiceImpl(AgreementController agreementController, Monitor monitor, OkHttpClient client, TypeManager typeManager, AgentConfig config) {
+    public DelegationServiceImpl(AgreementController agreementController, Monitor monitor, OkHttpClient client, TypeManager typeManager, AgentConfig config, UriSanitizer sanitizer) {
         this.agreementController = agreementController;
         this.monitor = monitor;
         this.client = client;
         this.typeManager = typeManager;
         this.config = config;
+        this.sanitizer = sanitizer;
     }
 
     /**
@@ -138,7 +135,7 @@ public class DelegationServiceImpl implements DelegationService {
      * @throws IOException in case something strange happens
      */
     public DelegationResponse sendGetRequest(EndpointDataReference dataReference, String subUrl, HttpHeaders headers, HttpServletResponse response, UriInfo uri) throws IOException {
-        var url = getUrl(dataReference.getEndpoint(), subUrl, headers, uri);
+        var url = sanitizer.getUrl(dataReference.getEndpoint(), subUrl, headers, uri);
 
         monitor.debug(String.format("About to delegate GET %s", url));
 
@@ -163,7 +160,7 @@ public class DelegationServiceImpl implements DelegationService {
      * @throws IOException in case something strange happens
      */
     public DelegationResponse sendPostRequest(EndpointDataReference dataReference, String subUrl, HttpHeaders headers, HttpServletRequest request, HttpServletResponse response, UriInfo uri) throws IOException {
-        var url = getUrl(dataReference.getEndpoint(), subUrl, headers, uri);
+        var url = sanitizer.getUrl(dataReference.getEndpoint(), subUrl, headers, uri);
 
         String contentType = request.getContentType();
         okhttp3.MediaType parsedContentType = okhttp3.MediaType.parse(contentType);
@@ -183,56 +180,6 @@ public class DelegationServiceImpl implements DelegationService {
         var newRequest = requestBuilder.build();
 
         return new DelegationResponse(sendRequest(newRequest, response), Response.status(response.getStatus()).build());
-    }
-
-    protected static final Pattern PARAMETER_KEY_ALLOW = Pattern.compile("^(?<param>(?!asset$)[^&?=]+)$");
-    protected static final Pattern PARAMETER_VALUE_ALLOW = Pattern.compile("^(?<value>[^&]+)$");
-
-    /**
-     * computes the url to target the given data plane
-     *
-     * @param connectorUrl data plane url
-     * @param subUrl       sub-path to use
-     * @param headers      containing additional info that we need to wrap into a transfer request
-     * @return typed url
-     */
-    protected HttpUrl getUrl(String connectorUrl, String subUrl, HttpHeaders headers, UriInfo uri) {
-        var url = connectorUrl;
-
-        // EDC public api slash problem
-        if (!url.endsWith("/") && !url.contains("#")) {
-            url = url + "/";
-        }
-
-        if (subUrl != null && !subUrl.isEmpty()) {
-            url = url + subUrl;
-        }
-
-        HttpUrl.Builder httpBuilder = Objects.requireNonNull(okhttp3.HttpUrl.parse(url)).newBuilder();
-        for (Map.Entry<String, List<String>> param : uri.getQueryParameters().entrySet()) {
-            String key = param.getKey();
-            Matcher keyMatcher = PARAMETER_KEY_ALLOW.matcher(key);
-            if (keyMatcher.matches()) {
-                String recodeKey = HttpUtils.urlEncodeParameter(keyMatcher.group("param"));
-                for (String value : param.getValue()) {
-                    Matcher valueMatcher = PARAMETER_VALUE_ALLOW.matcher(value);
-                    if (valueMatcher.matches()) {
-                        String recodeValue = HttpUtils.urlEncodeParameter(valueMatcher.group("value"));
-                        httpBuilder = httpBuilder.addQueryParameter(recodeKey, recodeValue);
-                    }
-                }
-            }
-        }
-
-        List<MediaType> mediaTypes = headers.getAcceptableMediaTypes();
-        if (mediaTypes.isEmpty() || mediaTypes.stream().anyMatch(MediaType.APPLICATION_JSON_TYPE::isCompatible)) {
-            httpBuilder = httpBuilder.addQueryParameter("cx_accept", HttpUtils.urlEncodeParameter("application/json"));
-        } else {
-            String mediaParam = mediaTypes.stream().map(MediaType::toString).collect(Collectors.joining(", "));
-            mediaParam = HttpUtils.urlEncodeParameter(mediaParam);
-            httpBuilder.addQueryParameter("cx_accept", mediaParam);
-        }
-        return httpBuilder.build();
     }
 
     /**

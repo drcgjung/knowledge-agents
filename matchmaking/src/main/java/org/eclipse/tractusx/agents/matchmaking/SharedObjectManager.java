@@ -27,8 +27,10 @@ import org.eclipse.tractusx.agents.AgentConfig;
 import org.eclipse.tractusx.agents.AgreementControllerImpl;
 import org.eclipse.tractusx.agents.SkillStore;
 import org.eclipse.tractusx.agents.http.AgentController;
+import org.eclipse.tractusx.agents.http.DefaultUriSanitizer;
 import org.eclipse.tractusx.agents.http.DelegationServiceImpl;
 import org.eclipse.tractusx.agents.http.GraphController;
+import org.eclipse.tractusx.agents.http.UriSanitizer;
 import org.eclipse.tractusx.agents.rdf.RdfStore;
 import org.eclipse.tractusx.agents.service.DataManagement;
 import org.eclipse.tractusx.agents.service.DataspaceSynchronizer;
@@ -63,8 +65,9 @@ public class SharedObjectManager {
     private final GraphController graphController;
     private final DelegationServiceImpl delegationService;
     private final DataspaceSynchronizer synchronizer;
+    private final UriSanitizer sanitizer;
     private final OkHttpClient httpClient;
-    
+
 
     private SharedObjectManager() {
         // Initialize shared objects
@@ -98,7 +101,7 @@ public class SharedObjectManager {
         this.rdfStore = new RdfStore(agentConfig, monitor);
         ScheduledExecutorService executorService = Executors.newScheduledThreadPool(agentConfig.getThreadPoolSize());
         synchronizer = new DataspaceSynchronizer(executorService, agentConfig, catalogService, rdfStore, monitor);
-        this.reg = new ServiceExecutorRegistry();   
+        this.reg = new ServiceExecutorRegistry();
         reg.addBulkLink(new DataspaceServiceExecutor(monitor, agreementController, agentConfig, httpClient, executorService, typeManager));
         SparqlQuerySerializerFactory arqQuerySerializerFactory = new SparqlQuerySerializerFactory();
         SerializerRegistry.get().addQuerySerializer(Syntax.syntaxARQ, arqQuerySerializerFactory);
@@ -106,10 +109,10 @@ public class SharedObjectManager {
         SerializerRegistry.get().addQuerySerializer(Syntax.syntaxSPARQL_11, arqQuerySerializerFactory);
         this.processor = new SparqlQueryProcessor(reg, monitor, agentConfig, rdfStore, typeManager);
         this.skillStore = new EdcSkillStore(catalogService, typeManager, agentConfig);
-        this.delegationService = new DelegationServiceImpl(agreementController, monitor, httpClient, typeManager, agentConfig);
+        this.sanitizer = new DefaultUriSanitizer(agentConfig);
+        this.delegationService = new DelegationServiceImpl(agreementController, monitor, httpClient, typeManager, agentConfig, sanitizer);
         this.agentController = new AgentController(monitor, agreementController, agentConfig, processor, skillStore, delegationService);
-        this.graphController = new GraphController(monitor, rdfStore, catalogService, agentConfig);
-        
+        this.graphController = new GraphController(monitor, rdfStore, catalogService, agentConfig, sanitizer);
     }
 
     public void start() {
@@ -201,5 +204,5 @@ public class SharedObjectManager {
     public GraphController getGraphController() {
         return graphController;
     }
-    
+
 }

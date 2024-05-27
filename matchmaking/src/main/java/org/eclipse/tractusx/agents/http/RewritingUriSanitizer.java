@@ -43,8 +43,8 @@ public class RewritingUriSanitizer implements UriSanitizer {
     }
 
     @Override
-    public String sanitizeAssetId(String assetId) {
-        Matcher assetMatcher = config.getAssetReferencePattern().matcher(assetId);
+    public String sanitizeAssetId(byte[] assetId) {
+        Matcher assetMatcher = config.getAssetReferencePattern().matcher(new String(assetId));
         if (assetMatcher.matches()) {
             return assetMatcher.group("asset");
         }

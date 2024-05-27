@@ -152,7 +152,8 @@ public class GraphController {
     ) {
         monitor.debug(String.format("Received a DELETE request %s for asset %s", request, asset));
         try {
-            String sanitizedAssetId = sanitizer.sanitizeAssetId(asset);
+            byte[] id = asset.getBytes();
+            String sanitizedAssetId = sanitizer.sanitizeAssetId(id);
             if (sanitizedAssetId != null) {
                 management.deleteAsset(sanitizedAssetId);
                 return Response.ok(store.deleteAsset(asset), MediaType.APPLICATION_JSON_TYPE).build();

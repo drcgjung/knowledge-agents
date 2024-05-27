@@ -30,7 +30,7 @@ public interface UriSanitizer {
      * @param assetId incoming asset id
      * @return sanizized asset id
      */
-    String sanitizeAssetId(String assetId);
+    String sanitizeAssetId(byte[] assetId);
 
     /**
      * sanitize an outgoing okhttp3 url call from jakarte incoming info

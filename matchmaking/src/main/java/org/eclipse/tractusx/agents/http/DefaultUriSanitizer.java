@@ -27,7 +27,7 @@ import java.util.Objects;
  */
 public class DefaultUriSanitizer implements UriSanitizer {
     @Override
-    public String sanitizeAssetId(String assetId) {
+    public String sanitizeAssetId(byte[] assetId) {
         return null;
     }
 

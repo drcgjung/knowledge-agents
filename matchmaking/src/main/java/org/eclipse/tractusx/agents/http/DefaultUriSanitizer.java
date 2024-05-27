@@ -17,49 +17,20 @@
 package org.eclipse.tractusx.agents.http;
 
 import jakarta.ws.rs.core.HttpHeaders;
-import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.UriInfo;
 import okhttp3.HttpUrl;
-import org.eclipse.tractusx.agents.AgentConfig;
 
-import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 /**
- * Implement uri sanitizing
+ * a default sanitizer doing no "dangerous" things
  */
 public class DefaultUriSanitizer implements UriSanitizer {
-
-    protected AgentConfig config;
-    protected static final Pattern PARAMETER_KEY_ALLOW = Pattern.compile("^(?<param>(?!asset$)[^&?=]+)$");
-    protected static final Pattern PARAMETER_VALUE_ALLOW = Pattern.compile("^(?<value>[^&]+)$");
-
-
-    public DefaultUriSanitizer(AgentConfig config) {
-        this.config = config;
-    }
-
     @Override
     public String sanitizeAssetId(String assetId) {
-        Matcher assetMatcher = config.getAssetReferencePattern().matcher(assetId);
-        if (assetMatcher.matches()) {
-            return assetMatcher.group("asset");
-        }
         return null;
     }
 
-    /**
-     * computes the url to target the given data plane
-     *
-     * @param connectorUrl data plane url
-     * @param subUrl       sub-path to use
-     * @param headers      containing additional info that we need to wrap into a transfer request
-     * @return typed url
-     */
     @Override
     public HttpUrl getUrl(String connectorUrl, String subUrl, HttpHeaders headers, UriInfo uri) {
         var url = connectorUrl;
@@ -74,29 +45,6 @@ public class DefaultUriSanitizer implements UriSanitizer {
         }
 
         HttpUrl.Builder httpBuilder = Objects.requireNonNull(okhttp3.HttpUrl.parse(url)).newBuilder();
-        for (Map.Entry<String, List<String>> param : uri.getQueryParameters().entrySet()) {
-            String key = param.getKey();
-            Matcher keyMatcher = PARAMETER_KEY_ALLOW.matcher(key);
-            if (keyMatcher.matches()) {
-                String recodeKey = HttpUtils.urlEncodeParameter(keyMatcher.group("param"));
-                for (String value : param.getValue()) {
-                    Matcher valueMatcher = PARAMETER_VALUE_ALLOW.matcher(value);
-                    if (valueMatcher.matches()) {
-                        String recodeValue = HttpUtils.urlEncodeParameter(valueMatcher.group("value"));
-                        httpBuilder = httpBuilder.addQueryParameter(recodeKey, recodeValue);
-                    }
-                }
-            }
-        }
-
-        List<MediaType> mediaTypes = headers.getAcceptableMediaTypes();
-        if (mediaTypes.isEmpty() || mediaTypes.stream().anyMatch(MediaType.APPLICATION_JSON_TYPE::isCompatible)) {
-            httpBuilder = httpBuilder.addQueryParameter("cx_accept", HttpUtils.urlEncodeParameter("application/json"));
-        } else {
-            String mediaParam = mediaTypes.stream().map(MediaType::toString).collect(Collectors.joining(", "));
-            mediaParam = HttpUtils.urlEncodeParameter(mediaParam);
-            httpBuilder.addQueryParameter("cx_accept", mediaParam);
-        }
         return httpBuilder.build();
     }
 }

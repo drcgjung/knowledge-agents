@@ -46,6 +46,7 @@ import org.eclipse.tractusx.agents.utils.TypeManager;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Properties;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -65,7 +66,7 @@ public class SharedObjectManager {
     private final GraphController graphController;
     private final DelegationServiceImpl delegationService;
     private final DataspaceSynchronizer synchronizer;
-    private final UriSanitizer sanitizer;
+    private UriSanitizer sanitizer;
     private final OkHttpClient httpClient;
 
 
@@ -109,7 +110,11 @@ public class SharedObjectManager {
         SerializerRegistry.get().addQuerySerializer(Syntax.syntaxSPARQL_11, arqQuerySerializerFactory);
         this.processor = new SparqlQueryProcessor(reg, monitor, agentConfig, rdfStore, typeManager);
         this.skillStore = new EdcSkillStore(catalogService, typeManager, agentConfig);
-        this.sanitizer = new DefaultUriSanitizer(agentConfig);
+        try {
+            this.sanitizer = (UriSanitizer) Class.forName(agentConfig.getSanitizerClass()).getConstructor(AgentConfig.class).newInstance(agentConfig);
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException | ClassNotFoundException e) {
+            this.sanitizer = new DefaultUriSanitizer();
+        }
         this.delegationService = new DelegationServiceImpl(agreementController, monitor, httpClient, typeManager, agentConfig, sanitizer);
         this.agentController = new AgentController(monitor, agreementController, agentConfig, processor, skillStore, delegationService);
         this.graphController = new GraphController(monitor, rdfStore, catalogService, agentConfig, sanitizer);

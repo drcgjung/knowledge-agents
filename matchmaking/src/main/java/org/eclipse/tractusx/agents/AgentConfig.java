@@ -102,6 +102,9 @@ public class AgentConfig {
     public static final String CALLBACK_PORT = "web.http.callback.port";
     public static final String CALLBACK_PATH = "web.http.callback.path";
 
+    public static final String SANITIZER_CLASS = "cx.agent.sanitizer.class";
+    public static final String DEFAULT_SANITIZER = "org.eclipse.tractusx.agents.http.RewritingUriSanitizer";
+
     /**
      * precompiled stuff
      */
@@ -474,4 +477,12 @@ public class AgentConfig {
         return config.getString(CALLBACK_PATH);
     }
 
+    /**
+     * access
+     *
+     * @return sanitizer implementation
+     */
+    public String getSanitizerClass() {
+        return config.getString(SANITIZER_CLASS, DEFAULT_SANITIZER);
+    }
 }
